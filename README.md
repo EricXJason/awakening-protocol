@@ -167,115 +167,29 @@ flowchart TD
 
 ---
 
-## 核心服務介面契約規範 (Interfaces)
+## 核心介面契約規範 (Interfaces)
 
-| 模組 | 介面名稱 | 檔案路徑 | 實作類別 | 定義之方法與屬性 | 職責說明 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Managers** | `ILevelManager` | `Managers/Interfaces/ILevelManager.cs` | `BaseLevelManager` (派生 6 關管理器) | `StageIndex`, `StageName`, `IsCompleted`, `InitializeLevel()`, `CompleteLevel()` | 規範關卡通關判定與生命週期。 |
-| **Managers** | `IStageAnimationService` | `Managers/Interfaces/IStageAnimationService.cs` | `StageSequenceController` | `TriggerOpeningProcess()`, `TriggerEndingProcess()`, 事件委派 | 規範關卡開場/結尾時序、視野暗角補間與字幕廣播。 |
-| **Controllers** | `IBarrierController` | `Controllers/Interfaces/IBarrierController.cs` | `GateController`, `FenceController` | `IsOpen`, `Open()`, `Close()` | 規範通行阻擋物（閘門、柵欄）之開關狀態。 |
-| **Core** | `IGameManager` | `Core/Interfaces/IGameManager.cs` | `GameManager` | `FailCount`, `CurrentLanguage`, `IsPlayable`, `SetPlayerStatus()` | 定義遊戲全域核心狀態與雙語管理。 |
-| **Audio** | `IAudioService` | `Audio/Interfaces/IAudioService.cs` | `AudioManager` | `PlaySFX()`, `GetClip()`, `GetVolume()` | 定義音效播放與語音查詢。 |
-
----
-
-## 場景節點拓撲與組件配置 (Scene Hierarchy & Component Setup)
-
-```text
-Scene Hierarchy (Stage Scene)
-├── [Core]
-│   ├── [GameManager]               <-- 掛載 Core/GameManager.cs (實作 IGameManager, DontDestroyOnLoad)
-│   ├── [AudioManager]              <-- 掛載 Audio/AudioManager.cs (實作 IAudioService, 掛載 AudioSource)
-│   └── [SceneLoader]               <-- 掛載 Core/SceneLoader.cs (非同步場景換關)
-├── XR Origin (XR Rig)              <-- 綁定 Meta Quest XR Origin 組件
-│   ├── Camera Offset
-│   │   ├── Main Camera             <-- 附帶 ScreenDimmer 與 Subtitle 視圖
-│   │   │   ├── [ScreenDimmer]      <-- 掛載 UI/ScreenDimmerController.cs
-│   │   │   └── [SubtitleText]      <-- 掛載 UI/SubtitleController.cs (TextMeshPro)
-│   │   ├── Left Controller         <-- 掛載 Player/PlayerController.cs (Near-Far Interactor)
-│   │   └── Right Controller        <-- 掛載 Player/PlayerController.cs (Near-Far Interactor)
-│   └── Locomotion Medium           <-- Snap Turn, Continuous Move, Teleportation Provider
-├── [StageSequence]                 <-- 掛載 Managers/StageSequenceController.cs (配置開場/結尾語音與字幕)
-├── [LevelManager]                  <-- 掛載該關卡專屬管理器 (如 LevelManager_SensorimotorStage, LevelManager_FormalOperationalStage)
-├── Objects & Environment
-│   ├── Gate                        <-- 掛載 Controllers/GateController.cs (實作 IBarrierController, 終點通關閘門)
-│   ├── Fence                       <-- 掛載 Controllers/FenceController.cs (實作 IBarrierController, 阻斷防護柵欄)
-│   ├── ElectricGrid                <-- 掛載 Controllers/ElectricGridController.cs (高壓電網障礙)
-│   ├── FinishLine                  <-- 掛載 Controllers/FinishLineController.cs (終點線判定)
-│   ├── GrabObjects                 <-- 掛載 XRGrabInteractable + Infrastructure/Interaction/ReturnToAnchor.cs (放手回彈錨點)
-│   ├── FloatingDecor               <-- 掛載 Infrastructure/Animation/TransformAnimator.cs (浮動補間動畫)
-│   ├── Batteries                   <-- 掛載 Controllers/BatteryController.cs (算式能量電池)
-│   ├── BlockChecker                <-- 掛載 Controllers/BlockCheckerController.cs (前運思期積木配對)
-│   ├── LightBalls                  <-- 掛載 Controllers/LightBallController.cs + XRSimpleInteractable
-│   ├── MazeStructure               <-- 掛載 Managers/SubManagers/MazeManager.cs (依失敗次數動態切換 8 種迷宮)
-│   └── PowerQuiz                   <-- 掛載 Managers/SubManagers/PowerQuizManager.cs (等式算式仲裁)
-└── Canvas_HUD                      <-- 掛載 UI/HUDController.cs (CanvasGroup 淡入淡出)
-```
+| 介面契約 (Interface) | 實作類別 (Implementation) | 職責說明 |
+| :--- | :--- | :--- |
+| `ILevelManager` | `BaseLevelManager` (派生 6 大關卡) | 抽象化關卡生命週期與通關判定 (Template Method) |
+| `IStageAnimationService` | `StageSequenceController` | 控管關卡開場/結尾時序、視野暗角補間與字幕廣播 |
+| `IBarrierController` | `GateController`, `FenceController` | 規範通行阻擋物（閘門、柵欄）之開關狀態與事件反饋 |
+| `IGameManager` | `GameManager` | 維護遊戲全域狀態、失敗計數與雙語切換 |
+| `IAudioService` | `AudioManager` | 集中調度關卡音效播放與 `SFXList` 語音資產快取 |
 
 ---
 
-## 專案檔案目錄結構
+## 模組架構與檔案拓撲 (Architecture Topology)
 
 ```text
-├── README.md
-├── Audio/                            # 音訊與語音播放
-│   ├── Interfaces/
-│   │   └── IAudioService.cs          # 音訊服務介面契約
-│   ├── AudioManager.cs               # 音訊播放與語音快取 (實作 IAudioService)
-│   └── SFXList.cs                    # 關卡語音與音效 ScriptableObject
-├── Controllers/                      # 場景物件、機關與障礙控制器
-│   ├── Interfaces/
-│   │   └── IBarrierController.cs     # 通行阻擋物契約 (閘門/柵欄開關狀態)
-│   ├── BatteryController.cs          # 算式能量電池 (數值與運算子)
-│   ├── BlockCheckerController.cs     # 前運思期積木配對檢驗器
-│   ├── ElectricGridController.cs     # 高壓電網障礙觸發器
-│   ├── FenceController.cs            # 升降防護柵欄控制器 (實作 IBarrierController)
-│   ├── FinishLineController.cs       # 關卡終點線觸發器
-│   ├── GateController.cs             # 終點滑動閘門與非同步換關觸發 (實作 IBarrierController)
-│   ├── GuideLightBallController.cs   # Limbo 階段光球航點巡航
-│   ├── LightBallController.cs        # 感覺動作期音階燈球 (XRSimpleInteractable)
-│   └── MazeDoorController.cs         # 形式運思期生路/死路判定門
-├── Core/                             # 核心系統與跨場景常駐管理
-│   ├── Interfaces/
-│   │   └── IGameManager.cs           # 核心遊戲狀態契約
-│   ├── GameManager.cs                # 核心狀態與事件發布 (實作 IGameManager)
-│   └── SceneLoader.cs                # 非同步場景換關器 (防重複加載)
-├── Editor/                           # 編輯器輔助工具
-│   └── GenerateHardEdgeOutline.cs    # 拓撲硬邊輪廓網格生成器
-├── Infrastructure/                   # 全域基礎設施與互動工具
-│   ├── Animation/
-│   │   └── TransformAnimator.cs      # 物件上下浮動、自體旋轉與縮放補間
-│   ├── EventBus/
-│   │   ├── EventBus.cs               # 泛型事件匯流排
-│   │   └── Events/
-│   │       └── VREvents.cs           # 事件結構體定義
-│   └── Interaction/
-│       └── ReturnToAnchor.cs         # 放手後平滑回彈錨點 (DOTween)
-├── Managers/                         # 關卡流程管理器
-│   ├── Interfaces/
-│   │   ├── ILevelManager.cs          # 關卡主契約 (DIP)
-│   │   └── IStageAnimationService.cs # 過場時序與動畫契約 (DIP)
-│   ├── BaseLevelManager.cs           # 萃取共同流程之抽象基類 (Template Method)
-│   ├── StageSequenceController.cs    # 通用過場時序控制器 (實作 IStageAnimationService)
-│   ├── LevelManager_LimboStage.cs                 # Stage 0: 邊界序章
-│   ├── LevelManager_SensorimotorStage.cs          # Stage 1: 感覺動作期 (音階檢驗)
-│   ├── LevelManager_PreoperationalStage.cs        # Stage 2: 前運思期 (積木檢驗)
-│   ├── LevelManager_ConcreteOperationalStage.cs   # Stage 3: 具體運思期 (算式仲裁)
-│   ├── LevelManager_FormalOperationalStage.cs     # Stage 4: 形式運思期 (迷宮與雙結局分支)
-│   ├── LevelManager_Ending.cs                     # Stage 5: 結算展示
-│   └── SubManagers/                               # 關卡局部解謎管理
-│       ├── MazeManager.cs                         # 8 種迷宮格局切換
-│       └── PowerQuizManager.cs                    # 能量等式算式平衡仲裁 (升降橋)
-├── Player/                           # 玩家與 XR Rig 控制層
-│   └── PlayerController.cs           # 移動、轉向、瞬移與射線互動模組開關
-├── Shaders/                          # 自定義著色器
-│   ├── PureEdgeLine.shader           # 拓撲純淨邊緣輪廓 Shader
-│   └── SilhouetteEffect.shader       # 物件剪影與外框 Shader
-└── UI/                               # VR 世界空間介面視圖
-    ├── HintTextController.cs         # 雙語提示文字視圖
-    ├── HUDController.cs              # 抬頭顯示器淡入淡出 (CanvasGroup)
-    ├── MainMenuManager.cs            # 首頁語系切換與遊戲開始
-    ├── PauseMenuController.cs        # 暫停選單 (Input System 動作綁定)
-    ├── ScreenDimmerController.cs     # 全景視野暗角過場控制器
-    └── SubtitleController.cs         # 3D 空間雙語字幕控制器
+awakening-protocol/
+├── Core/               # 遊戲全域狀態與非同步換關 (GameManager, SceneLoader)
+├── Managers/           # 關卡流程抽象與時序仲裁 (BaseLevelManager, StageSequenceController)
+│   └── SubManagers/    # 局部解謎演算法 (動態迷宮切換 MazeManager, 等式算式 PowerQuizManager)
+├── Controllers/        # 場景互動機關 (終點閘門 Gate, 電網障礙, 能量電池, 提示燈球)
+├── Player/             # VR 體感控制器 (XR Origin, 近遠距互動 PlayerController)
+├── Infrastructure/     # 核心基礎設施 (泛型 EventBus, 放手平滑回彈 ReturnToAnchor, 補間動畫)
+├── Audio/              # 音效服務與 ScriptableObject 語音配置 (SFXList)
+├── UI/                 # VR 空間介面 (全景暗角過場, 3D 雙語字幕, HUD, 暫停選單)
+└── Shaders/            # 自定義邊緣輪廓與剪影著色器 (PureEdgeLine, SilhouetteEffect)
 ```
